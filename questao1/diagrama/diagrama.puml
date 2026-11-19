@@ -1,0 +1,172 @@
+@startuml
+title Questão 1: Provisionamento Multinuvem
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package dominio {
+  interface Recurso <<AbstractProduct>> {
+    +id(): String
+    +provedor(): String
+  }
+  interface MaquinaVirtual <<AbstractProduct A>> {
+    +custoPorHora(): double
+  }
+  interface Armazenamento <<AbstractProduct B>> {
+    +gb(): int
+    +custoPorGb(): double
+  }
+  interface Fila <<AbstractProduct C>> {
+    +custoMensalFixo(): double
+  }
+  interface ProvedorFactory <<AbstractFactory>> {
+    +nome(): String
+    +criarMaquinaVirtual(): MaquinaVirtual
+    +criarArmazenamento(gb: int): Armazenamento
+    +criarFila(): Fila
+    +custoHoraMaquina(): double
+    +custoGbArmazenamento(): double
+    +custoMensalFila(): double
+  }
+  class Provisionador <<Client>> {
+    -fabrica: ProvedorFactory
+    +Provisionador(fabrica: ProvedorFactory)
+    +provisionar(s: SolicitacaoAmbiente): Optional<Ambiente>
+  }
+  class Ambiente {
+    -nome: String
+    -regiao: String
+    +custoMensal(): double
+    +resumo(): String
+  }
+  class SolicitacaoAmbiente <<record>> {
+    +nome: String
+    +provedor: String
+    +qtdMaquinas: int
+    +gbArmazenamento: int
+  }
+  class CalculoCusto {
+    +{static} mensal(...): double
+  }
+}
+
+package aws {
+  class AwsFactory <<ConcreteFactory>> {
+    -seqMaquina: AtomicInteger
+    -seqArmazenamento: AtomicInteger
+    -seqFila: AtomicInteger
+  }
+  class AwsMaquinaVirtual <<ConcreteProduct>> {
+    ~id: "i-N", R$ 0,10/h
+  }
+  class AwsArmazenamento <<ConcreteProduct>> {
+    ~id: "s3://N", R$ 0,023/GB
+  }
+  class AwsFila <<ConcreteProduct>> {
+    ~id: "sqs-N", R$ 0,40/mês
+  }
+}
+
+package azure {
+  class AzureFactory <<ConcreteFactory>> {
+    -seqMaquina: AtomicInteger
+    -seqArmazenamento: AtomicInteger
+    -seqFila: AtomicInteger
+  }
+  class AzureMaquinaVirtual <<ConcreteProduct>> {
+    ~id: "vm-N", R$ 0,12/h
+  }
+  class AzureArmazenamento <<ConcreteProduct>> {
+    ~id: "blob://N", R$ 0,02/GB
+  }
+  class AzureFila <<ConcreteProduct>> {
+    ~id: "sb-N", R$ 0,50/mês
+  }
+}
+
+package suporte {
+  class Config <<Singleton>> {
+    -{static} INSTANCIA: Config
+    -regiaoPadrao: String
+    -orcamentoMensalMaximo: double
+    -Config()
+    +{static} getInstance(): Config
+    +regiaoPadrao(): String
+    +orcamentoMensalMaximo(): double
+  }
+  class HistoricoAuditoria <<Singleton>> {
+    -{static} INSTANCIA: HistoricoAuditoria
+    -registros: List<RegistroAuditoria>
+    -HistoricoAuditoria()
+    +{static} getInstance(): HistoricoAuditoria
+    +registrar(...): void  {synchronized}
+    +listar(): List<RegistroAuditoria>  {synchronized}
+  }
+  class RegistroAuditoria <<record>> {
+    +dataHora: LocalDateTime
+    +ambiente: String
+    +provedor: String
+    +resultado: Resultado
+    +motivo: String
+  }
+  enum Resultado {
+    ACEITO
+    RECUSADO
+  }
+}
+
+class SeletorProvedor <<escolhe o provedor>> {
+  +{static} escolher(provedor: String): ProvedorFactory
+}
+class Main
+
+MaquinaVirtual --|> Recurso
+Armazenamento --|> Recurso
+Fila --|> Recurso
+
+AwsFactory ..|> ProvedorFactory
+AzureFactory ..|> ProvedorFactory
+AwsMaquinaVirtual ..|> MaquinaVirtual
+AwsArmazenamento ..|> Armazenamento
+AwsFila ..|> Fila
+AzureMaquinaVirtual ..|> MaquinaVirtual
+AzureArmazenamento ..|> Armazenamento
+AzureFila ..|> Fila
+
+AwsFactory ..> AwsMaquinaVirtual : <<create>>
+AwsFactory ..> AwsArmazenamento : <<create>>
+AwsFactory ..> AwsFila : <<create>>
+AzureFactory ..> AzureMaquinaVirtual : <<create>>
+AzureFactory ..> AzureArmazenamento : <<create>>
+AzureFactory ..> AzureFila : <<create>>
+
+Provisionador o--> ProvedorFactory : recebe de fora
+Provisionador ..> Ambiente : <<create>>
+Provisionador ..> Config : usa
+Provisionador ..> HistoricoAuditoria : usa
+Provisionador ..> CalculoCusto
+Provisionador ..> SolicitacaoAmbiente
+Ambiente o--> "1..*" MaquinaVirtual
+Ambiente o--> "1" Armazenamento
+Ambiente o--> "1" Fila
+HistoricoAuditoria *--> "0..*" RegistroAuditoria
+RegistroAuditoria --> Resultado
+
+SeletorProvedor ..> AwsFactory
+SeletorProvedor ..> AzureFactory
+SeletorProvedor ..> ProvedorFactory
+Main ..> SeletorProvedor
+Main ..> Provisionador
+Main ..> HistoricoAuditoria
+
+note right of SeletorProvedor
+  Único ponto que conhece as fábricas concretas.
+  Um provedor novo (Gcp) = pacote gcp novo
+  + uma linha aqui (RNF03).
+end note
+
+note bottom of AwsMaquinaVirtual
+  Construtores com visibilidade de pacote:
+  só a fábrica do próprio provedor
+  instancia recursos concretos (RNF06).
+end note
+@enduml
