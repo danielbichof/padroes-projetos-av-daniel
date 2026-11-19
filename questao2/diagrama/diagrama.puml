@@ -1,0 +1,188 @@
+@startuml
+title Questão 2: Casa de Leilões Online
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package leilao {
+  class Lote <<Subject / Context>> {
+    -nome: String
+    -precoInicial: double
+    -precoReserva: double
+    -lanceAtual: double
+    -status: StatusLote
+    -regraComissao: RegraComissao
+    +anexar(o: ObservadorLance): void
+    +desanexar(o: ObservadorLance): void
+    -notificar(l: Lance): void
+    +darLance(l: Licitante, valor: double): ResultadoLance
+    +encerrar(): StatusLote
+    +trocarRegraComissao(r: RegraComissao): void
+    +comissao(): double
+    +valorVenda(): double
+  }
+  interface ObservadorLance <<Observer>> {
+    +atualizar(lote: Lote, lance: Lance): void
+  }
+  interface Licitante {
+    +nome(): String
+  }
+  class Categoria <<record>> {
+    +nome: String
+    +regraPadrao: RegraComissao
+  }
+  class Lance <<record>> {
+    +licitante: Licitante
+    +valor: double
+  }
+  class ResultadoLance <<record>> {
+    +aceito: boolean
+    +mensagem: String
+  }
+  enum StatusLote {
+    ABERTO
+    VENDIDO
+    NAO_VENDIDO
+  }
+}
+
+package interessados {
+  class Participante <<ConcreteObserver>> {
+    -nome: String
+    +acompanhar(l: Lote): void
+    +deixarDeAcompanhar(l: Lote): void
+    +darLance(l: Lote, valor: double): ResultadoLance
+    +atualizar(lote: Lote, lance: Lance): void
+  }
+  class PainelLeiloeiro <<ConcreteObserver>> {
+    +atualizar(lote: Lote, lance: Lance): void
+  }
+  class Auditor <<ConcreteObserver>> {
+    -registros: List<String>
+    +atualizar(lote: Lote, lance: Lance): void
+  }
+}
+
+package comissao {
+  interface RegraComissao <<Strategy>> {
+    +nome(): String
+    +calcular(valorVenda: double): double
+  }
+  class ComissaoArte <<ConcreteStrategy>> {
+    20% do valor
+  }
+  class ComissaoVeiculos <<ConcreteStrategy>> {
+    8%, teto R$ 5.000,00
+  }
+  class ComissaoImoveis <<ConcreteStrategy>> {
+    3% + R$ 1.500,00
+  }
+  class ComissaoEletronicos <<ConcreteStrategy>> {
+    12%, mínimo R$ 50,00
+  }
+  class AcertoVendedor {
+    +{static} imprimir(lote: String, venda: double, comissao: double): void
+  }
+}
+
+package fatura {
+  interface Fatura <<Component>> {
+    +lote(): String
+    +valorVenda(): double
+    +linhas(): List<LinhaFatura>
+    +total(): double
+  }
+  class LinhaFatura <<record>> {
+    +descricao: String
+    +custo: double
+  }
+  class FaturaBase <<ConcreteComponent>> {
+    -lote: String
+    -valorVenda: double
+  }
+  abstract class ServicoAdicional <<Decorator>> {
+    #fatura: Fatura
+    #{abstract} descricaoServico(): String
+    #{abstract} custoServico(): double
+    +linhas(): List<LinhaFatura>
+  }
+  class SeguroTransporte <<ConcreteDecorator>> {
+    1,5% do valor de venda
+  }
+  class CertificadoAutenticidade <<ConcreteDecorator>> {
+    R$ 300,00
+  }
+  class EmbalagemEspecial <<ConcreteDecorator>> {
+    R$ 180,00
+  }
+  class EntregaExpressa <<ConcreteDecorator>> {
+    R$ 450,00
+  }
+  class ImpressoraFatura {
+    +{static} imprimir(f: Fatura): void
+  }
+}
+
+class Main
+
+' Observer
+Lote o--> "0..*" ObservadorLance : observadores
+ObservadorLance ..> Lote
+Participante ..|> ObservadorLance
+PainelLeiloeiro ..|> ObservadorLance
+Auditor ..|> ObservadorLance
+Participante ..|> Licitante
+Lote ..> Licitante
+Lote *--> "0..*" Lance
+Lance --> Licitante
+Lote ..> ResultadoLance
+Lote --> StatusLote
+Participante ..> Lote
+
+' Strategy
+Lote o--> "1" RegraComissao : regra vigente
+Categoria --> RegraComissao : regra padrão
+Lote --> Categoria
+ComissaoArte ..|> RegraComissao
+ComissaoVeiculos ..|> RegraComissao
+ComissaoImoveis ..|> RegraComissao
+ComissaoEletronicos ..|> RegraComissao
+
+' Decorator
+FaturaBase ..|> Fatura
+ServicoAdicional ..|> Fatura
+ServicoAdicional o--> "1" Fatura : envolve
+SeguroTransporte --|> ServicoAdicional
+CertificadoAutenticidade --|> ServicoAdicional
+EmbalagemEspecial --|> ServicoAdicional
+EntregaExpressa --|> ServicoAdicional
+Fatura ..> LinhaFatura
+ImpressoraFatura ..> Fatura
+
+Main ..> Lote
+Main ..> Participante
+Main ..> PainelLeiloeiro
+Main ..> Auditor
+Main ..> Categoria
+Main ..> FaturaBase
+Main ..> ServicoAdicional
+Main ..> AcertoVendedor
+Main ..> ImpressoraFatura
+
+note bottom of Lote
+  Só conhece ObservadorLance, Licitante e RegraComissao.
+  Novo interessado = classe nova (RNF01).
+  Troca de regra em tempo de execução (RNF02).
+end note
+
+note bottom of ServicoAdicional
+  Serviços empilham em qualquer ordem e quantidade.
+  Novo serviço = nova subclasse (RNF03).
+  ImpressoraFatura não verifica quais serviços existem (RNF04).
+end note
+
+note as N1
+  Independência (RNF05): os pacotes comissao e fatura
+  não importam leilao. Cada padrão vive em seu pacote
+  e se liga aos outros só por interfaces e valores simples.
+end note
+@enduml
